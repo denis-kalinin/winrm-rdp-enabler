@@ -2,10 +2,10 @@ Write-Output "Set all network interfaces as private network to enable winrm"
 try{
   Set-NetConnectionProfile -NetworkCategory Private
 }catch{
-# Get network connections for Windows 7
-$networkListManager = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]"{DCB00C01-570F-4A9B-8D69-199FDBA5723B}"))
-$connections = $networkListManager.GetNetworkConnections()
-# Set network location to Private for all networks
+  # Get network connections for Windows 7
+  $networkListManager = [Activator]::CreateInstance([Type]::GetTypeFromCLSID([Guid]"{DCB00C01-570F-4A9B-8D69-199FDBA5723B}"))
+  $connections = $networkListManager.GetNetworkConnections()
+  # Set network location to Private for all networks
   $connections | % {$_.GetNetwork().SetCategory(1)}
 }
 Write-Output "Enabling WinRM remoting"
@@ -36,7 +36,7 @@ $LocalAdmin.FullName = "Local Admin for Powershell"
 $LocalAdmin.setInfo()
 $LocalAdmin.Description = "Defined by Powershell"
 $LocalAdmin.setInfo()
-$admGroupSID = get-wmiobject win32_group -Filter "SID=\'S-1-5-32-544\'"
+$admGroupSID = get-wmiobject win32_group -Filter "SID='S-1-5-32-544'"
 $admGroupName = $admGroupSID.Name
 Write-Output ("Adding " + $localAdminName + " to group " + $admGroupName)
 $groupExpression = "WinNT://$Env:COMPUTERNAME/"+$admGroupSID.Name+",Group"
@@ -160,7 +160,7 @@ $regex = "(.*)(StrictModes|PubkeyAuthentication|AuthorizedKeysFile)\s+(.+)"
   $line
 } | Set-Content etc/sshd_config
 Write-Output "Changing password for opensshd service"
-$service = Get-WMIObject -namespace "root\cimv2" -class Win32_Service -Filter "Name=\'opensshd\'"
+$service = Get-WMIObject -namespace "root\cimv2" -class Win32_Service -Filter "Name='opensshd'"
 $newAccount = ".\sshd_server"
 $newPassword = $localAdminPassword
 $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$newPassword)
