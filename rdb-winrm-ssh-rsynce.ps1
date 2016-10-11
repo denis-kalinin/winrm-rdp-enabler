@@ -231,7 +231,7 @@ function Sshd-Install {
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
   Restart-Service "opensshd"
 }
-NetworskAsPrivate-Set
+NetworksAsPrivate-Set
 WinrmRemote-Enable
 WinrmOverHttp-Enable
 Restart-Service winrm
