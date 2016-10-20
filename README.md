@@ -8,12 +8,12 @@ Provision Window VM instance with powershell script that enables:
  on OS up from Windows 7 SP1.
 
 ## why you may need this?
-Let you spin off a **VM** (_virtual machine_) in a cloud&mdash;AWS, Openstack, Auzre,
+Let you want to launch a **VM** (_virtual machine_) in a cloud&mdash;AWS, Openstack, Auzre,
 et cetera&mdash;with arbitrary image of Windows OS &ndash; how do you install
 software on the VM, configure settings?
 
-When you are goint to spawn VM instance in a cloud you have an option to pass
-**cloud-init** script in *Powershell* language (for Windows OS). This script will
+When you are going to spawn VM instance in a cloud you have an option to pass
+**cloud-init** script in **Powershell** language (for Windows OS). This script will
 run only once at the end of VM's creation. **Cloud-init** leads us to a couple of ways how to achive our
 goals (install and configure software on VM):
 
