@@ -20,6 +20,7 @@ function WinrmRemote-Enable {
     .description
       Turns off network profile check for WinRM, for Windows 7 - turns off firewall
   #>
+  Set-ExecutionPolicy RemoteSigned
   Enable-PSRemoting -Force
   try{
     Set-WSManQuickConfig -SkipNetworkProfileCheck -Force
@@ -61,7 +62,7 @@ function RDP-Enable {
 function LocalAdmin-Create {
   param([string]$username, [string]$password)
   $Computer = [ADSI]"WinNT://$Env:COMPUTERNAME,Computer"
-  Write-Output ("Creating " + $username + " user")
+  Write-Host "Creating $username user"
   $LocalAdmin = $Computer.Create("User", $username)
   $LocalAdmin.setPassword($password)
   $LocalAdmin.UserFlags = 64 + 65536
@@ -72,7 +73,7 @@ function LocalAdmin-Create {
   $LocalAdmin.setInfo()
   $admGroupSID = get-wmiobject win32_group -Filter "SID='S-1-5-32-544'"
   $admGroupName = $admGroupSID.Name
-  Write-Output ("Adding $username  to group $admGroupName")
+  Write-Host ("Adding $username  to group $admGroupName")
   $groupExpression = "WinNT://$Env:COMPUTERNAME/$admGroupName,Group"
   $AdminGroup = [ADSI]$groupExpression
   $AdminGroup.Add("WinNT://$username,User")
@@ -80,11 +81,11 @@ function LocalAdmin-Create {
 }
 
 function UsersDir-Get {
-  $userProfilePath = [Environment]::GetFolderPath("MyDocuments")
-  Write-Output "Userprofile $userProfilePathfor user $env:USERNAME"
-  $usersDir = (get-item $userProfilePath ).parent.parent.FullName
-  Write-Output "Users directory is $usersDir"
-  return $userDir
+  $userProfilePath = $env:USERPROFILE
+  Write-Host "Userprofile $userProfilePathfor user $env:USERNAME"
+  $usersDir = (get-item $userProfilePath ).parent.FullName
+  Write-Host "Users directory is $usersDir"
+  return $usersDir
 }
 
 function LocalAdminProfile-Create {
@@ -161,10 +162,10 @@ function DownloadFromHttp {
       Name of the file in local directory where to save download.
   #>
   param([string]$url, [string]$dir, [string]$filename)
-  New-Item $dir -type directory
+  New-Item $dir -type directory -Force | Out-Null
   $saveTo = "$dir\$filename"
   Write-Host "Downloading $url into $saveTo"
-  (New-Object System.Net.WebClient).DownloadFile($url, $saveTo)
+  (New-Object System.Net.WebClient).DownloadFile($url, $saveTo) | Out-Null
   return $saveTo
 }
 
@@ -172,6 +173,8 @@ function Cygwin-Install {
   Write-Host "Installing Cygwin for Rsync"
   $cygSaveTo = DownloadFromHttp -url "https://cygwin.com/setup-x86.exe" -dir "C:\TEMP\Downloads" -filename "setup-x86.exe"
   $cyginfo = New-Object System.Diagnostics.ProcessStartInfo
+  $cyginfo.RedirectStandardError = $true
+  $cyginfo.RedirectStandardOutput = $true
   $cyginfo.FileName = $cygSaveTo
   $cyginfo.UseShellExecute = $false
   $CYG_PATH = "C:\cygwin"
@@ -181,12 +184,16 @@ function Cygwin-Install {
   $cyg.Start() | Out-Null
   $cyg.WaitForExit()
   if($cyg.ExitCode -eq 0){
-    #$OLD_USER_PATH=[Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::User)
+    #$$OLD_USER_PATH=[Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::User)
     $OLD_MACHINE_PATH=[Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine)
     $CYG_PATH = $CYG_PATH+";"+$CYG_PATH+"\bin"
-    #[Environment]::SetEnvironmentVariable("PATH", "${OLD_USER_PATH};${CYG_PATH}", "User")
-    [Environment]::SetEnvironmentVariable("PATH", "${OLD_MACHINE_PATH};${CYG_PATH}", "Machine")
-    Write-Output "rsync installed"
+    #[Environment]::SetEnvironmentVariable("PATH", "$${OLD_USER_PATH};$${CYG_PATH}", "User")
+    [Environment]::SetEnvironmentVariable("PATH", "$OLD_MACHINE_PATH;$CYG_PATH", "Machine")
+    Write-Host "rsync installed"
+  }else {
+    Write-Host "exit code: " $cyg.ExitCode
+    Write-Host "ERROR: " $cyg.StandardError.ReadToEnd()
+    Write-Host "OUTPUT: " $cyg.StandardOutput.ReadToEnd()
   }
 }
 
@@ -197,10 +204,10 @@ function Sshd-Install {
     .parameter password
       ./sshd_server account's password that will run OpenSSH service
   #>
-  param([string]password)
+  param([string]$password)
   $saveTo = DownloadFromHttp -url "http://www.mls-software.com/files/setupssh-7.2p2-1-v1.exe" -dir "C:\TEMP\Downloads" -filename "OpenSSH-Install.exe"
   $sshDir = "C:\Program Files\OpenSSH"
-  Write-Output "Installing OpenSSH service"
+  Write-Host "Installing OpenSSH service"
   $pinfo = New-Object System.Diagnostics.ProcessStartInfo
   $pinfo.FileName = $saveTo
   #$pinfo.RedirectStandardError = $true
@@ -211,8 +218,8 @@ function Sshd-Install {
   $p.StartInfo = $pinfo
   $p.Start() | Out-Null
   $p.WaitForExit()
-  Write-Output "exit code: " + $p.ExitCode
-  Write-Output "Installed from $saveTo"
+  Write-Host "exit code: " + $p.ExitCode
+  Write-Host "Installed from $saveTo"
   cd $sshDir
   $regex = "(.*)(StrictModes|PubkeyAuthentication|AuthorizedKeysFile)\s+(.+)"
   (Get-Content etc/sshd_config) | % {
@@ -225,7 +232,7 @@ function Sshd-Install {
     }
     $line
   } | Set-Content etc/sshd_config
-  Write-Output "Removing DOMAIN or HOSTNAME from service account name"
+  Write-Host "Removing DOMAIN or HOSTNAME from service account name"
   $service = Get-WMIObject -namespace "root\cimv2" -class Win32_Service -Filter "Name='opensshd'"
   $newAccount = ".\sshd_server"
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
@@ -240,6 +247,6 @@ $username = "LocalAdmin"
 $password = "Password01"
 LocalAdmin-Create -username $username -password $password
 LocalAdminProfile-Create -username $username -password $password
-SshKeys-Install -username $username
+#SshKeys-Install -username $username
 #Cygwin-Install
 #Sshd-Install -password $password
