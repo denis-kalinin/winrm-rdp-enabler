@@ -1,5 +1,5 @@
 #ps1_sysnative
-function NetworksAsPrivate-Set {
+function Set-NetworksAsPrivate {
   <#
     .synopsis
       Set all network interfaces as private network to enable winrm
@@ -13,7 +13,7 @@ function NetworksAsPrivate-Set {
     $connections | % {$_.GetNetwork().SetCategory(1)}
   }
 }
-function WinrmRemote-Enable {
+function Enable-WinrmRemote {
   <#
     .synopsis
       Enables WinRM remoting
@@ -30,7 +30,7 @@ function WinrmRemote-Enable {
   }
 }
 
-function WinrmOverHttp-Enable {
+function Enable-WinrmOverHttp {
   <#
     .synopsis
       Allow WinRM over plain HTTP (AllowUnencrypted)
@@ -40,7 +40,7 @@ function WinrmOverHttp-Enable {
   Write-Host "WinRM over HTTP is enabled"
 }
 
-function RDP-Enable {
+function Enable-RDP {
   Set-ItemProperty -Path "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server" -name "fDenyTSConnections" -Value 0
   Set-ItemProperty -Path  "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -name "UserAuthentication" -Value 1
   $RDP = Get-WmiObject -Class Win32_TerminalServiceSetting -Namespace root\CIMV2\TerminalServices -ErrorAction Stop
@@ -59,7 +59,7 @@ function RDP-Enable {
   }
 }
 
-function LocalAdmin-Create {
+function New-LocalAdmin {
   param([string]$username, [string]$password)
   $Computer = [ADSI]"WinNT://$Env:COMPUTERNAME,Computer"
   Write-Host "Creating $username user"
@@ -80,7 +80,7 @@ function LocalAdmin-Create {
   $AdminGroup.SetInfo()
 }
 
-function UsersDir-Get {
+function Get-UsersDir {
   $userProfilePath = $env:USERPROFILE
   Write-Host "Userprofile $userProfilePathfor user $env:USERNAME"
   $usersDir = (get-item $userProfilePath ).parent.FullName
@@ -88,7 +88,7 @@ function UsersDir-Get {
   return $usersDir
 }
 
-function LocalAdminProfile-Create {
+function New-LocalAdminProfile {
   <#
     .synopsis
       Creates Local admin profile
@@ -124,7 +124,44 @@ function LocalAdminProfile-Create {
   })
 }
 
-function SshKeys-Install {
+function GrantLogonAsSerivce {
+  <#
+    .synopsis
+      Grants logon as a service right to user
+    .parameter username
+      username that can logon as service
+  #>
+  param([string]$username)
+  # Grant logon as a service right
+  $tempPath = [System.IO.Path]::GetTempPath()
+  $import = Join-Path -Path $tempPath -ChildPath "import.inf"
+  if(Test-Path $import) { Remove-Item -Path $import -Force }
+  $export = Join-Path -Path $tempPath -ChildPath "export.inf"
+  if(Test-Path $export) { Remove-Item -Path $export -Force }
+  $secedt = Join-Path -Path $tempPath -ChildPath "secedt.sdb"
+  if(Test-Path $secedt) { Remove-Item -Path $secedt -Force }
+  try {
+    Write-Host ("Granting SeServiceLogonRight to user account: {0}." -f $username)
+    $sid = ((New-Object System.Security.Principal.NTAccount($username)).Translate([System.Security.Principal.SecurityIdentifier])).Value
+    secedit /export /cfg $export
+    $sids = (Select-String $export -Pattern "SeServiceLogonRight").Line
+    foreach ($line in @("[Unicode]", "Unicode=yes", "[System Access]", "[Event Audit]", "[Registry Values]", "[Version]", "signature=`"`$CHICAGO$`"", "Revision=1", "[Profile Description]", "Description=GrantLogOnAsAService security template", "[Privilege Rights]", "SeServiceLogonRight = *$sids,*$sid")){
+      Add-Content $import $line
+    }
+    secedit /import /db $secedt /cfg $import
+    secedit /configure /db $secedt
+    gpupdate /force
+    Remove-Item -Path $import -Force
+    Remove-Item -Path $export -Force
+    Remove-Item -Path $secedt -Force
+  }
+  catch {
+    Write-Host ("Failed to grant SeServiceLogonRight to user account: {0}" -f $username)
+    $error[0]
+  }
+}
+
+function Install-SshKeys {
   <#
     .synopsis
       Puts cloud keys to the specified user profile, that will run SSH daemon.
@@ -133,7 +170,7 @@ function SshKeys-Install {
   #>
   param([string]$username)
   Write-Host "Searching authorized_keys in users profiles"
-  $usersDir = UsersDir-Get
+  $usersDir = Get-UsersDir
   $table = Get-ChildItem $usersDir -recurse | Where-Object {$_.PSIsContainer -eq $true -and $_.Name -match ".ssh"}
   foreach($file in $table){
     $sshdir = $file.FullName
@@ -169,7 +206,7 @@ function DownloadFromHttp {
   return $saveTo
 }
 
-function Cygwin-Install {
+function Install-Cygwin {
   Write-Host "Installing Cygwin for Rsync"
   $cygSaveTo = DownloadFromHttp -url "https://cygwin.com/setup-x86.exe" -dir "C:\TEMP\Downloads" -filename "setup-x86.exe"
   $cyginfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -197,7 +234,7 @@ function Cygwin-Install {
   }
 }
 
-function Sshd-Install {
+function Install-Sshd {
   <#
     .synopsis
       Downloads and runs OpenSSH server for Windows
@@ -220,7 +257,7 @@ function Sshd-Install {
   $p.WaitForExit()
   Write-Host "exit code: " + $p.ExitCode
   Write-Host "Installed from $saveTo"
-  cd $sshDir
+  Set-Location $sshDir
   $regex = "(.*)(StrictModes|PubkeyAuthentication|AuthorizedKeysFile)\s+(.+)"
   (Get-Content etc/sshd_config) | % {
     $line = $_
@@ -238,15 +275,16 @@ function Sshd-Install {
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
   Restart-Service "opensshd"
 }
-NetworksAsPrivate-Set
-WinrmRemote-Enable
-WinrmOverHttp-Enable
+Set-NetworksAsPrivate
+Enable-WinrmRemote
+Enable-WinrmOverHttp
 Restart-Service winrm
-RDP-Enable
-$username = "LocalAdmin"
-$password = "Password01"
-LocalAdmin-Create -username $username -password $password
-LocalAdminProfile-Create -username $username -password $password
-#SshKeys-Install -username $username
-#Cygwin-Install
-#Sshd-Install -password $password
+Enable-RDP
+$username = "${LocalAdminUsername}"
+$password = "${LocalAdminPassword}"
+New-LocalAdmin -username $username -password $password
+New-LocalAdminProfile -username $username -password $password
+GrantLogonAsSerivce -username $username
+Install-SshKeys -username $username
+#Install-Cygwin
+#Install-Sshd -password $password
