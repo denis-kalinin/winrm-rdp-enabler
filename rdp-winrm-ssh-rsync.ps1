@@ -275,13 +275,17 @@ function Install-Sshd {
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
   Restart-Service "opensshd"
 }
+$defaultUsername = "${LocalAdminUsername}"
+$defaultPassword = "${LocalAdminPassword}"
+Param(
+  [string]$username = $defaultUsername,
+  [string]$password = $defaultPassword
+);
 Set-NetworksAsPrivate
 Enable-WinrmRemote
 Enable-WinrmOverHttp
 Restart-Service winrm
 Enable-RDP
-$username = "${LocalAdminUsername}"
-$password = "${LocalAdminPassword}"
 New-LocalAdmin -username $username -password $password
 New-LocalAdminProfile -username $username -password $password
 GrantLogonAsSerivce -username $username
