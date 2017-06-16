@@ -1,4 +1,15 @@
 #ps1_sysnative
+param(
+  [string]$username = "${LocalAdminUsername}",
+  [string]$password = "${LocalAdminPassword}"
+);
+if(!$username){
+    Write-Error "paremter -username is undefined"
+    exit 1
+}
+if(!$password){
+    $password = "";
+}
 function Set-NetworksAsPrivate {
   <#
     .synopsis
@@ -275,12 +286,6 @@ function Install-Sshd {
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
   Restart-Service "opensshd"
 }
-$defaultUsername = "${LocalAdminUsername}"
-$defaultPassword = "${LocalAdminPassword}"
-Param(
-  [string]$username = $defaultUsername,
-  [string]$password = $defaultPassword
-);
 Set-NetworksAsPrivate
 Enable-WinrmRemote
 Enable-WinrmOverHttp
