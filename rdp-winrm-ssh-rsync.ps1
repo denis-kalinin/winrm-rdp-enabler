@@ -3,8 +3,11 @@ param(
   [string]$username = "${LocalAdminUsername}",
   [string]$password = "${LocalAdminPassword}"
 );
+#$username = "${LocalAdminUsername}"
+#$password = "${LocalAdminPassword}"
+Write-Host "Username - $username"
 if(!$username){
-    Write-Error "paremter -username is undefined"
+    Write-Error "parameter -username is undefined"
     exit 1
 }
 if(!$password){
@@ -216,35 +219,6 @@ function DownloadFromHttp {
   (New-Object System.Net.WebClient).DownloadFile($url, $saveTo) | Out-Null
   return $saveTo
 }
-
-function Install-Cygwin {
-  Write-Host "Installing Cygwin for Rsync"
-  $cygSaveTo = DownloadFromHttp -url "https://cygwin.com/setup-x86.exe" -dir "C:\TEMP\Downloads" -filename "setup-x86.exe"
-  $cyginfo = New-Object System.Diagnostics.ProcessStartInfo
-  $cyginfo.RedirectStandardError = $true
-  $cyginfo.RedirectStandardOutput = $true
-  $cyginfo.FileName = $cygSaveTo
-  $cyginfo.UseShellExecute = $false
-  $CYG_PATH = "C:\cygwin"
-  $cyginfo.Arguments = "--quiet-mode --site ftp://ftp.funet.fi/pub/mirrors/cygwin.com/pub/cygwin/ --root $CYG_PATH --packages rsync,curl"
-  $cyg = New-Object System.Diagnostics.Process
-  $cyg.StartInfo = $cyginfo
-  $cyg.Start() | Out-Null
-  $cyg.WaitForExit()
-  if($cyg.ExitCode -eq 0){
-    #$$OLD_USER_PATH=[Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::User)
-    $OLD_MACHINE_PATH=[Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine)
-    $CYG_PATH = $CYG_PATH+";"+$CYG_PATH+"\bin"
-    #[Environment]::SetEnvironmentVariable("PATH", "$${OLD_USER_PATH};$${CYG_PATH}", "User")
-    [Environment]::SetEnvironmentVariable("PATH", "$OLD_MACHINE_PATH;$CYG_PATH", "Machine")
-    Write-Host "rsync installed"
-  }else {
-    Write-Host "exit code: " $cyg.ExitCode
-    Write-Host "ERROR: " $cyg.StandardError.ReadToEnd()
-    Write-Host "OUTPUT: " $cyg.StandardOutput.ReadToEnd()
-  }
-}
-
 function Install-Sshd {
   <#
     .synopsis
@@ -286,6 +260,23 @@ function Install-Sshd {
   $service.Change($null,$null,$null,$null,$null,$null,$newAccount,$password)
   Restart-Service "opensshd"
 }
+# Step 4: Disable Automatic Updates
+# Reference: http://www.benmorris.me/2012/05/1st-test-blog-post.html
+$AutoUpdate = (New-Object -com "Microsoft.Update.AutoUpdate").Settings
+$AutoUpdate.NotificationLevel = 1
+$AutoUpdate.Save()
+Write-Host "Windows Update has been disabled." -ForegroundColor Green
+ 
+# Step 5: Disable Complex Passwords
+# Reference: http://vlasenko.org/2011/04/27/removing-password-complexity-requirements-from-windows-server-2008-core/
+$seccfg = [IO.Path]::GetTempFileName()
+secedit /export /cfg $seccfg
+(Get-Content $seccfg) | Foreach-Object {$_ -replace "PasswordComplexity\s*=\s*1", "PasswordComplexity=0"} | Set-Content $seccfg
+secedit /configure /db $env:windir\security\new.sdb /cfg $seccfg /areas SECURITYPOLICY
+del $seccfg
+Write-Host "Complex Passwords have been disabled." -ForegroundColor Green
+
+
 Set-NetworksAsPrivate
 Enable-WinrmRemote
 Enable-WinrmOverHttp
@@ -295,5 +286,8 @@ New-LocalAdmin -username $username -password $password
 New-LocalAdminProfile -username $username -password $password
 GrantLogonAsSerivce -username $username
 Install-SshKeys -username $username
-#Install-Cygwin
+#iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+#choco install cygwin
 #Install-Sshd -password $password
+
+
